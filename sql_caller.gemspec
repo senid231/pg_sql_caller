@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = 'Postgresql Sql Caller for ActiveRecord'
   spec.description   = 'Postgresql Sql Caller for ActiveRecord.'
-  spec.homepage      = 'https://github.com/senid231/pg_sql_caller'
+  spec.homepage      = 'https://github.com/didww/pg_sql_caller'
   spec.license       = 'MIT'
   spec.required_ruby_version = Gem::Requirement.new('>= 2.3.0')
 
