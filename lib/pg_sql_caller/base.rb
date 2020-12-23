@@ -15,8 +15,7 @@ module PgSqlCaller
         :select_values,
         :execute,
         :select_all,
-        :select_rows,
-        :select_row
+        :select_rows
     ].freeze
 
     class_attribute :_model_class, instance_writer: false
@@ -56,23 +55,62 @@ module PgSqlCaller
         *CONNECTION_SQL_METHODS,
         :transaction_open?,
         :select_all_serialized,
+        :select_value_serialized,
+        :select_values_serialized,
+        :next_sequence_value,
+        :table_full_size,
+        :table_data_size,
+        :select_row,
         :transaction,
         :explain_analyze,
         :typecast_array,
         :sanitize_sql_array,
         :current_database,
-        *CONNECTION_SQL_METHODS,
         to: :instance,
         type: :single
     )
 
     define_sql_methods(*CONNECTION_SQL_METHODS)
 
-    delegate :transaction_open?, to: :connection
+    def transaction_open?
+      connection.send(:transaction_open?)
+    end
 
     def select_all_serialized(sql, *bindings)
       result = select_all(sql, *bindings)
-      result.map { |row| row.map { |k, v| [k.to_sym, result.column_types[k].deserialize(v)] }.to_h }
+      result.map do |row|
+        row.map { |key, value| [key.to_sym, deserialize_result(result, key, value)] }.to_h
+      end
+    end
+
+    def select_value_serialized(sql, *bindings)
+      result = select_all(sql, *bindings)
+      key = result.first.keys.first
+      value = result.first.values.first
+      deserialize_result(result, key, value)
+    end
+
+    def select_values_serialized(sql, *bindings)
+      result = select_all(sql, *bindings)
+      result.map do |row|
+        row.map { |key, value| deserialize_result(result, key, value) }
+      end
+    end
+
+    def next_sequence_value(table_name)
+      select_value("SELECT last_value FROM #{table_name}_id_seq") + 1
+    end
+
+    def table_full_size(table_name)
+      select_value('SELECT pg_total_relation_size(?)', table_name)
+    end
+
+    def table_data_size(table_name)
+      select_value('SELECT pg_relation_size(?)', table_name)
+    end
+
+    def select_row(sql, *bindings)
+      select_rows(sql, *bindings)[0]
     end
 
     def transaction
@@ -103,6 +141,13 @@ module PgSqlCaller
     private
 
     delegate :connection, to: :model_class
+
+    def deserialize_result(result, column_name, raw_value)
+      column_type = result.column_types[column_name]
+      return raw_value if column_type.nil?
+
+      column_type.deserialize(raw_value)
+    end
 
     def model_class
       return @model_class if defined?(@model_class)
